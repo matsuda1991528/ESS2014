@@ -8,8 +8,7 @@ int main(){
 	while(1){
 		a = runCoverAndDockDemo();
 		printf("a = %d\n", a);
-	}
-	printf("finish\n");
+	}	
 	stopOI_MT();
 	return 0;
 }
