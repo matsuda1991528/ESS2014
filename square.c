@@ -15,21 +15,23 @@
 #define CICLE_TIME_SEC 1             //サイクルタイム[sec]
 //#define CICLE_TIME 1000             //サイクルタイム[msec] (動作環境がWindowsの場合)
 #define CICLE_TIME 1000000          //サイクルタイム[usec] (動作環境がUbuntuの場合)
-#define OPERATE_FINISH 100         //走査終了時間[sec]
-#define TARGET_X 1500                 //x軸への目標移動距離[mm]
+#define OPERATE_FINISH 300         //走査終了時間[sec]
+#define FIELD_SIZE_X 1700
+#define FIELD_SIZE_Y 2000
+#define TARGET_X 2000                 //x軸への目標移動距離[mm]
 #define TARGET_Y 300                   //y軸への目標移動距離[mm]
 #define TARGET_ANGLE 90             //目標回転角度
 #define SCAN_CLOCKWISE_ANGLE 180                   //スキャン角度(時計廻り)
 #define SCAN_COUNTERCLOCKWISE_ANGLE 90   //スキャン角度(反時計廻り)
 #define AVOID_SIDE 500                //横方向への移動距離(障害物回避)
-#define AVOID_VERTICAL 500        //縦方向への移動距離(障害物回避)
-#define SENSOR_THRESHOLD 300 //物体検知の物体間距離の閾値
+#define AVOID_VERTICAL 700        //縦方向への移動距離(障害物回避)
+#define SENSOR_THRESHOLD 400 //物体検知の物体間距離の閾値
 #define TRUE 1
 #define FALSE -1
 #define PRA -1                              //setjmpの戻り値
 #define MAX 9999
 #define MIN 0
-#define CREATE_ACROSS 150 //irobot createの半径[mm]
+#define CREATE_ACROSS 200 //irobot createの半径[mm]
 
 #define CELL_NUM 40
 #define CELL_SIZE_X 50
@@ -50,14 +52,18 @@ int goVirticalWay();
 int goSideWay();
 int turnCounterClockewise();
 int turnClockewise();
-void recognize_obs();
+void recognize_obs_theta_0();
+void recognize_obs_theta_180();
 struct scanData getEdgeObject(struct scanData);
 struct scanData scanClockwise(struct scanData);
 struct scanData scanCounterClockwise();
 void firstAvoidSideWay();
+void firstAvoidSideWay_theta_180(int);
 void firstAvoidVirticalWay();
 void secondAvoidVirticalWay(int);
+void secondAvoidVirticalWay_theta_180(int);
 void secondAvoidSideWay(int);
+void secondAvoidSideWay_theta_180(int);
 struct objectPos_data getObjectPos(int, int);
 void getMap();
 ///////////////////////////////////////////////////
@@ -171,7 +177,7 @@ struct localization_data initiate_pos(){
 	struct localization_data initiate;
 	
 	initiate.x = 0;
-	initiate.y = 1000;
+	initiate.y = 0;
 	initiate.theta = 0;
 	initiate.vel = 0;
 	initiate.omega = 0;
@@ -232,15 +238,15 @@ void getCurrentPos(int vel_left, int vel_right){
 /////////////////////////////////////////////////
 
 /* 障害物スキャン/回避全体構成モジュール */
-void recognize_obs(){
+void recognize_obs_theta_0(){
 	struct scanData scanPos;
 	int first_y = sum_data.y;
 	waitTime(1);
 /* 物体スキャン開始 */
-	printf("scanClock\n");
+	printf("scanCounterClockwise\n");
 	scanPos = scanCounterClockwise(); //反時計廻りにスキャン
 	waitTime(1);
-	printf("scanCounterClock\n");
+	printf("scanClockwise\n");
 	scanPos = scanClockwise(scanPos);  //時計廻りにスキャン
 	waitTime(1);
 /* 障害物のmin_x, min_y, max_x, max_yの抽出終了 */
@@ -273,6 +279,50 @@ void recognize_obs(){
 	waitTime(1);
 	printf("turnClockwise\n");
 	turnClockwise();
+	waitTime(1);
+}
+
+void recognize_obs_theta_180(){
+	struct scanData scanPos;
+	int first_y = sum_data.y;
+	waitTime(1);
+	printf("scanCounterClockwise\n");
+	scanPos = scanCounterClockwise();  //反時計廻りにスキャン
+	waitTime(1);
+	printf("scanClockwise\n");
+	scanPos = scanClockwise(scanPos);  //時計廻りにスキャン
+	waitTime(1);
+	/* 障害物のmin_x, min_y, max_x, max_yの抽出終了 */
+	printf("avoidSideWay\n");
+	firstAvoidSideWay_theta_180(scanPos.max_y); //物体に対して平行に回避(ロボットy座標 > scanPos.max_y)
+	waitTime(1);
+	printf("turn CounterClockwise\n");
+	turnCounterClockwise();//反時計廻りに旋回
+	waitTime(1);
+	printf("firstAvoidVirtical\n");
+	firstAvoidVirticalWay();//物体に対して垂直方向に回避
+	waitTime(1);
+	printf("turnCounterClockwise\n");
+	turnCounterClockwise(); //反時計廻りに旋回
+	waitTime(1);
+	printf("scanCounterClockwise\n");
+	scanPos = scanCounterClockwise(); //反時計廻りにスキャン
+	waitTime(1);
+	printf("scanClockwise\n");
+	scanPos = scanClockwise(scanPos); //時計廻りにスキャン
+	waitTime(1);
+	printf("secondAvoidVirticalWay\n");
+	secondAvoidVirticalWay_theta_180(scanPos.min_x); //物体に対して垂直に移動(ロボットx座標　< scanPos.min_x)
+	waitTime(1);
+	printf("turnClockwise\n");
+	turnCounterClockwise();
+	printf("secondAvoidSideWay\n");
+	secondAvoidSideWay_theta_180(first_y);//障害物検知前の軌道へ戻る(ロボットy座標 == first_yまで)
+	waitTime(1);
+	printf("turnClockwise\n");
+	turnClockwise();
+	printf("finish\n");
+	waitTime(1);
 }
 
 /* 物体の端の座標取得 */
@@ -351,7 +401,7 @@ struct scanData scanCounterClockwise(){
 	return scanPos;
 }
 
-/* 横方向へ障害物回避 */
+/* 横方向へ障害物回避(sum_data.theta == 0) */
 void firstAvoidSideWay(int edge_of_object){
 	int target_distance = AVOID_SIDE;
 	int vel_left = MOVE_VELO;
@@ -365,6 +415,28 @@ void firstAvoidSideWay(int edge_of_object){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
 		if(sum_data.y < edge_of_object - CREATE_ACROSS){
+			directDrive(0, 0);
+			break;
+		}
+		else{
+			count_time();
+		}
+	}
+	operate_flag = check_operate_time();
+}
+
+/* 横方向への障害物回避(sum_data.theta == 180) */
+void firstAvoidSideWay_theta_180(int edge_of_object){
+	int target_distance = AVOID_SIDE;
+	int vel_left = MOVE_VELO;
+	int vel_right = MOVE_VELO;
+	int operate_flag = -1;
+	initiate_vel_omega();
+	directDrive(vel_left, vel_right);
+	while(1){
+		getCurrentPos(vel_left, vel_right);
+		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		if(sum_data.y > edge_of_object + CREATE_ACROSS){
 			directDrive(0, 0);
 			break;
 		}
@@ -422,6 +494,26 @@ void secondAvoidVirticalWay(int edge_of_object){
 	operate_flag = check_operate_time();
 }
 
+void secondAvoidVirticalWay_theta_180(int edge_of_object){
+	int vel_left = MOVE_VELO;
+	int vel_right = MOVE_VELO;
+	int operate_flag = -1;
+	initiate_vel_omega();
+	directDrive(vel_left, vel_right);
+	while(1){
+		getCurrentPos(vel_left, vel_right);
+		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		if(sum_data.x < edge_of_object - CREATE_ACROSS){
+			directDrive(0, 0);
+			break;
+		}
+		else{
+			count_time();
+		}
+	}
+	operate_flag = check_operate_time();
+}
+
 void secondAvoidSideWay(int firstCoord_y){
 	int vel_left = MOVE_VELO;
 	int vel_right = MOVE_VELO;
@@ -432,6 +524,26 @@ void secondAvoidSideWay(int firstCoord_y){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
 		if(sum_data.y >= firstCoord_y){
+			directDrive(0, 0);
+			break;
+		}
+		else{
+			count_time();
+		}
+	}
+	operate_flag = check_operate_time();
+}
+
+void secondAvoidSideWay_theta_180(int firstCoord_y){
+	int vel_left = MOVE_VELO;
+	int vel_right = MOVE_VELO;
+	int operate_flag = -1;
+	initiate_vel_omega();
+	directDrive(vel_left, vel_right);
+	while(1){
+		getCurrentPos(vel_left, vel_right);
+		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		if(sum_data.y <= firstCoord_y){
 			directDrive(0, 0);
 			break;
 		}
@@ -473,22 +585,28 @@ int goVirticalWay(){
 	int sensor_distance;
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
-	if(fp1){
-		while(1){
-			getCurrentPos(vel_left, vel_right);
-			fprintf(fp1, "%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
-			printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
-			sensor_distance = getSensor();
-			if(sensor_distance <= SENSOR_THRESHOLD){
-				recognize_obs();
+	while(1){
+		getCurrentPos(vel_left, vel_right);
+		fprintf(fp1, "%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		sensor_distance = getSensor();
+		if(sensor_distance <= SENSOR_THRESHOLD){
+			if(sum_data.x <= 1500 && sum_data.x >= 200){
+				if(sum_data.theta == 0){
+					recognize_obs_theta_0();
+					directDrive(vel_left, vel_right);
+				}else{
+					recognize_obs_theta_180();
+					directDrive(vel_left, vel_right);
+				}
 			}
-			else if(abs(sum_data.x - temp_x) >= target_distance){
-				directDrive(0, 0);
-				break;
-			}
-			else{
-				count_time();
-			}
+		}
+		if(abs(sum_data.x - temp_x) >= target_distance){
+			directDrive(0, 0);
+			break;
+		}
+		else{
+			count_time();
 		}
 	}
 	operate_flag = check_operate_time();
@@ -533,7 +651,7 @@ int turnCounterClockwise(){
 	directDrive(vel_left, vel_right);
 	while(1){
 		totalAngle += getAngle();
-		if(abs(totalAngle - tempAngle) >= targetAngle - 8){
+		if(abs(totalAngle - tempAngle) >= targetAngle - 5){
 			directDrive(0, 0);
 			break;
 		}
@@ -639,27 +757,35 @@ int main(void){
 		operate_flag = goVirticalWay();
 		if(operate_flag == TRUE)
 			break;
+		waitTime(1);
 		operate_flag = turnCounterClockwise();
 		if(operate_flag == TRUE)
 			break;
+		waitTime(1);	
 		operate_flag = goSideWay();
 		if(operate_flag == TRUE)
 			break;
+		waitTime(1);
 		operate_flag = turnCounterClockwise();
 		if(operate_flag == TRUE)
 			break;
+		waitTime(1);
 		operate_flag = goVirticalWay();
 		if(operate_flag == TRUE)
 			break;
+		waitTime(1);
 		operate_flag = turnClockwise();
 		if(operate_flag == TRUE)
 			break;
+		waitTime(1);
 		operate_flag = goSideWay();
 		if(operate_flag == TRUE)
 			break;
+		waitTime(1);
 		operate_flag = turnClockwise();
 		if(operate_flag == TRUE)
 			break;
+		waitTime(1);
 		update_theta();
 	}
 	
