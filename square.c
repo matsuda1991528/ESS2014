@@ -22,7 +22,7 @@
 #define FIELD_VIRTICAL_LENGTH 4700 //フィールド縦辺(x軸方向)の長さ[mm]
 #define SMALL_FIELD_ANGLE 60 //頂点角度(小さい方)
 #define BIG_FIELD_ANGLE 120   //頂点角度(大きい方)
-#define TARGET_X 3900                 //x軸への目標移動距離[mm]
+#define TARGET_X 3600                 //x軸への目標移動距離[mm]
 #define TARGET_Y 600                   //y軸への目標移動距離[mm]
 #define TURN_CLOCKWISE_ANGLE 60             //目標回転角度(時計廻り)
 #define TURN_COUNTERCLOCKWISE_ANGLE 120     //目標回転角度(反時計廻り)
@@ -30,7 +30,7 @@
 #define SCAN_CLOCKWISE_ANGLE 180                   //スキャン角度(時計廻り)
 #define SCAN_COUNTERCLOCKWISE_ANGLE 90   //スキャン角度(反時計廻り)
 #define AVOID_SIDE 700                //横方向への移動距離(障害物回避)
-#define AVOID_VERTICAL 500        //縦方向への移動距離(障害物回避)
+#define AVOID_VERTICAL 700        //縦方向への移動距離(障害物回避)
 #define SENSOR_THRESHOLD 400 //物体検知の物体間距離の閾値
 #define TRUE 1
 #define FALSE -1
@@ -60,7 +60,9 @@ int goSideWay();
 int turnCounterClockewise(int);
 int turnClockewise(int);
 void recognize_obs_theta_0();
+void twice_recognize_obs_theta_0();
 void recognize_obs_theta_180();
+void twice_recognize_obs_theta_180();
 struct scanData getEdgeObject(struct scanData);
 struct scanData scanClockwise(struct scanData);
 struct scanData scanCounterClockwise();
@@ -250,6 +252,7 @@ void recognize_obs_theta_0(){
 	printf("recognize_obs_theta_0\n");
 	struct scanData scanPos;
 	int first_y = sum_data.y;
+	directDrive(0, 0);
 	waitTime(1);
 /* 物体スキャン開始 */
 	printf("scanCounterClockwise\n");
@@ -291,10 +294,30 @@ void recognize_obs_theta_0(){
 	waitTime(1);
 }
 
+void twice_recognize_obs_theta_0(){
+	printf("twice_rcognize_obs_theta_0\n");
+	struct scanData scanPos;
+	directDrive(0, 0);
+	waitTime(1);
+	printf("scanCounterClockwise\n");
+	scanPos = scanCounterClockwise(); //反時計まわりにスキャン
+	waitTime(1);
+	printf("scanClockwise\n");
+	scanPos = scanClockwise(scanPos); //時計廻りにスキャン
+	waitTime(1);
+	printf("avoidSide\n");
+	firstAvoidSideWay(scanPos.min_y);
+	waitTime(1);
+	turnCounterClockwise(TURN_TARGET_ANGLE);
+	waitTime(1);
+	printf("twice recognize finish!!!!\n");
+}
+
 void recognize_obs_theta_180(){
 	printf("recognize_obs_theta_180\n");
 	struct scanData scanPos;
 	int first_y = sum_data.y;
+	directDrive(0, 0);
 	waitTime(1);
 	printf("scanCounterClockwise\n");
 	scanPos = scanCounterClockwise();  //反時計廻りにスキャン
@@ -336,6 +359,25 @@ void recognize_obs_theta_180(){
 	waitTime(1);
 }
 
+void twice_recognize_obs_theta_180(){
+	printf("twice_recognize_obs_theta_180\n");
+	struct scanData scanPos;
+	directDrive(0, 0);
+	waitTime(1);
+	printf("scanCounterClockwise\n");
+	scanPos = scanCounterClockwise();
+	waitTime(1);
+	printf("scanClockwise\n");
+	scanPos = scanClockwise(scanPos);
+	waitTime(1);
+	printf("avoidSide\n");
+	firstAvoidSideWay_theta_180(scanPos.max_y);
+	waitTime(1);
+	turnCounterClockwise(TURN_TARGET_ANGLE);
+	waitTime(1);
+	printf("twice recognize finsh\n");
+}
+
 /* 物体の端の座標取得 */
 struct scanData getEdgeObject(struct scanData scanPos){
 	if(scanPos.min_x > objectPos.x)
@@ -365,10 +407,13 @@ struct scanData scanClockwise(struct scanData scanPos){
 		while(1){
 			totalAngle += getAngle();
 			sensor_distance = getSensor();
-			if(sensor_distance < 2 * SENSOR_THRESHOLD){
-				objectPos = getObjectPos(sensor_distance, sum_data.theta - (totalAngle - tempAngle));
-				//if(objectPos.y > 0 && objectPos.y < FIELD_SIDE_LENGTH * cos(90 - SMALL_FIELD_ANGLE)){ //y軸方向のスキャン範囲指定
+			if(sensor_distance < SENSOR_THRESHOLD){
+				objectPos = getObjectPos(sensor_distance, sum_data.theta + (totalAngle - tempAngle));
+				//printf("x = %d, y = %d, theta = %d\n", objectPos.x, objectPos.y, sum_data.theta - (totalAngle - tempAngle));
+				//printf("%d = %d + (%d - %d)\n", sum_data.theta + (totalAngle - tempAngle), sum_data.theta, totalAngle, tempAngle);
+				//if(objectPos.y > 0){ //y軸方向のスキャン範囲指定
 					//if(objectPos.x > -1.73 * objectPos.y && objectPos.x < -1.73 * objectPos.y + FIELD_VIRTICAL_LENGTH){ //x軸方向のスキャン範囲指定
+						printf("robot = (%d, %d), object = (%d, %d)\n", sum_data.x, sum_data.y, objectPos.x, objectPos.y);
 						fprintf(fp2, "%4d, %4d\n", objectPos.x, objectPos.y);
 						scanPos = getEdgeObject(scanPos);
 					//}
@@ -403,10 +448,13 @@ struct scanData scanCounterClockwise(){
 		while(1){
 			totalAngle += getAngle();
 			sensor_distance = getSensor();
-			if(sensor_distance < 1.5 * SENSOR_THRESHOLD){
+			if(sensor_distance < 1.5*SENSOR_THRESHOLD){
 				objectPos = getObjectPos(sensor_distance, sum_data.theta + (totalAngle - tempAngle));
-				//if(objectPos.y > 0 && objectPos.y <  FIELD_SIDE_LENGTH * cos(90 - SMALL_FIELD_ANGLE)){ //y軸方向のスキャン範囲指定
+				//printf("x = %d, y = %d, theta = %d\n", objectPos.x, objectPos.y, sum_data.theta + (totalAngle - tempAngle));
+				//printf("%d = %d + (%d - %d)\n", sum_data.theta + (totalAngle - tempAngle), sum_data.theta, totalAngle, tempAngle);
+				//if(objectPos.y > 0){ //y軸方向のスキャン範囲指定
 					//if(objectPos.x > -1.73 * objectPos.y && objectPos.x < -1.73 * objectPos.y + FIELD_VIRTICAL_LENGTH){ //x軸方向のスキャン範囲指定
+						printf("robot = (%d, %d), object = (%d, %d)\n", sum_data.x, sum_data.y, objectPos.x, objectPos.y);
 						fprintf(fp2, "%4d, %4d\n", objectPos.x, objectPos.y);
 						scanPos = getEdgeObject(scanPos);
 					//}
@@ -437,7 +485,7 @@ void firstAvoidSideWay(int edge_of_object){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
 		//if(sum_data.y < edge_of_object - CREATE_ACROSS){
-		if(sum_data.y < edge_of_object - 0.5 * CREATE_ACROSS){
+		if(sum_data.y < edge_of_object - CREATE_ACROSS){
 			printf("%d < %d\n", sum_data.y, edge_of_object);
 			directDrive(0, 0);
 			break;
@@ -460,7 +508,7 @@ void firstAvoidSideWay_theta_180(int edge_of_object){
 	while(1){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
-		if(sum_data.y > edge_of_object + 0.5*CREATE_ACROSS){
+		if(sum_data.y > edge_of_object + CREATE_ACROSS){
 			printf("%d < %d - %g\n", sum_data.y, edge_of_object, 0.5*CREATE_ACROSS);
 			directDrive(0, 0);
 			break;
@@ -481,11 +529,26 @@ void firstAvoidVirticalWay(){
 	int temp_x = sum_data.x;
 	int temp_y = sum_data.y;
 	int sensor_distance;
+	int before_sensor_distance = MAX;
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
 	while(1){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		sensor_distance = getSensor();
+		printf("before_sensor = %d, current_sensor %d\n", before_sensor_distance, sensor_distance);
+		if(sensor_distance <= SENSOR_THRESHOLD){
+			if((before_sensor_distance - sensor_distance) < JUDGE_NOISE){
+				if(abs(sum_data.theta) < 90){
+					twice_recognize_obs_theta_0();
+					directDrive(vel_left, vel_right);
+				}
+				else{
+					twice_recognize_obs_theta_180();
+					directDrive(vel_left, vel_right);
+				}
+			}
+		}
 		if(abs(sum_data.x - temp_x) >= target_distance ||
 		abs(sum_data.y - temp_y) >= target_distance){
 			directDrive(0, 0);
@@ -494,6 +557,7 @@ void firstAvoidVirticalWay(){
 		else{
 			count_time();
 		}
+		before_sensor_distance = sensor_distance;
 	}
 	operate_flag = check_operate_time();
 //	return operate_flag;
@@ -616,12 +680,12 @@ int goVirticalWay(){
 	directDrive(vel_left, vel_right);
 	while(1){
 		getCurrentPos(vel_left, vel_right);
-		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		printf("totalDistance = %d, %4d, %4d, %4d\n",totalDistance,  sum_data.x, sum_data.y, sum_data.theta);
 		sensor_distance = getSensor();
 		printf("before_sensor = %d, current_sensor %d\n", before_sensor_distance, sensor_distance);
 		totalDistance = sum_data.x - temp_x;
-		if(sensor_distance <= SENSOR_THRESHOLD){
-			if(totalDistance <= target_distance - 1.5 * SENSOR_THRESHOLD){
+		if(sensor_distance <= SENSOR_THRESHOLD){  //センサー取得値が閾値内
+			if(abs(totalDistance) <= target_distance - 2.5 * SENSOR_THRESHOLD ){
 				if((before_sensor_distance - sensor_distance) < JUDGE_NOISE){
 					if(abs(sum_data.theta) < 90){
 						recognize_obs_theta_0();
@@ -681,7 +745,7 @@ int turnCounterClockwise(int targetAngle){
 	directDrive(vel_left, vel_right);
 	while(1){
 		totalAngle += getAngle();
-		if(abs(totalAngle - tempAngle) >= targetAngle - 6){
+		if(abs(totalAngle - tempAngle) >= targetAngle - 4){
 			directDrive(0, 0);
 			break;
 		}
