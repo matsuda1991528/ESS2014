@@ -39,6 +39,16 @@
 #define MIN 0
 #define CREATE_ACROSS 400 //irobot createの半径[mm]
 #define JUDGE_NOISE 200 //外れ値の基準
+/* 超信地旋回の誤差値 */
+#define MODIFY_CLOCKWISE_180 14
+#define MODIFY_CLOCKWISE_120 6
+#define MODIFY_CLOCKWISE_90 7
+#define MODIFY_CLOCKWISE_60 8
+#define MODIFY_COUNTERCLOCKWISE_120 6
+#define MODIFY_COUNTERCLOCKWISE_90 8
+#define MODIFY_COUNTERCLOCKWISE_60 7
+
+
 
 #define CELL_NUM 40
 #define CELL_SIZE_X 50
@@ -57,8 +67,8 @@ void update_theta();
 void getCurrentPos(int, int);
 int goVirticalWay();
 int goSideWay();
-int turnCounterClockewise(int);
-int turnClockewise(int);
+int turnCounterClockewise(int, int);
+int turnClockewise(int, int);
 void recognize_obs_theta_0();
 void twice_recognize_obs_theta_0();
 void recognize_obs_theta_180();
@@ -266,13 +276,13 @@ void recognize_obs_theta_0(){
 	firstAvoidSideWay(scanPos.min_y); //物体に対して平行に回避(ロボットy座標 < scanPos.min_yまで)
 	waitTime(1);
 	printf("turn_clock\n");
-	turnCounterClockwise(TURN_TARGET_ANGLE); //反時計廻りに旋回
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90); //反時計廻りに旋回
 	waitTime(1);
 	printf("firstavoidVirtical\n");
 	firstAvoidVirticalWay(); // 物体に対して垂直方向に回避
 	waitTime(1);
 	printf("turnCounterClockwise\n");
-	turnCounterClockwise(TURN_TARGET_ANGLE); //反時計廻りに旋回
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90); //反時計廻りに旋回
 	waitTime(1);
 	printf("scanCounterClockwise\n");
 	scanPos = scanCounterClockwise();
@@ -284,13 +294,13 @@ void recognize_obs_theta_0(){
 	secondAvoidVirticalWay(scanPos.max_x); //物体に対して垂直に移動(ロボットx座標 > scanPos.max_xまで)
 	waitTime(1);
 	printf("turnCounterClockwise\n");
-	turnCounterClockwise(TURN_TARGET_ANGLE); //反時計廻りに旋回
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90); //反時計廻りに旋回
 	waitTime(1);
 	printf("secondAvoidSideWay\n");
 	secondAvoidSideWay(first_y);//障害物検知前の軌道へ戻る(ロボットy座標 == first_yまで)
 	waitTime(1);
 	printf("turnClockwise\n");
-	turnClockwise(TURN_TARGET_ANGLE);
+	turnClockwise(TURN_TARGET_ANGLE, MODIFY_CLOCKWISE_90);
 	waitTime(1);
 }
 
@@ -308,7 +318,7 @@ void twice_recognize_obs_theta_0(){
 	printf("avoidSide\n");
 	firstAvoidSideWay(scanPos.min_y);
 	waitTime(1);
-	turnCounterClockwise(TURN_TARGET_ANGLE);
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90);
 	waitTime(1);
 	printf("twice recognize finish!!!!\n");
 }
@@ -330,13 +340,13 @@ void recognize_obs_theta_180(){
 	firstAvoidSideWay_theta_180(scanPos.max_y); //物体に対して平行に回避(ロボットy座標 > scanPos.max_y)
 	waitTime(1);
 	printf("turn CounterClockwise\n");
-	turnCounterClockwise(TURN_TARGET_ANGLE);//反時計廻りに旋回
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90);//反時計廻りに旋回
 	waitTime(1);
 	printf("firstAvoidVirtical\n");
 	firstAvoidVirticalWay();//物体に対して垂直方向に回避
 	waitTime(1);
 	printf("turnCounterClockwise\n");
-	turnCounterClockwise(TURN_TARGET_ANGLE); //反時計廻りに旋回
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90); //反時計廻りに旋回
 	waitTime(1);
 	printf("scanCounterClockwise\n");
 	scanPos = scanCounterClockwise(); //反時計廻りにスキャン
@@ -347,14 +357,14 @@ void recognize_obs_theta_180(){
 	printf("secondAvoidVirticalWay\n");
 	secondAvoidVirticalWay_theta_180(scanPos.min_x); //物体に対して垂直に移動(ロボットx座標　< scanPos.min_x)
 	waitTime(1);
-	printf("turnClockwise\n");
-	turnCounterClockwise(TURN_TARGET_ANGLE);
+	printf("turnCounterClockwise\n");
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90);
 	waitTime(1);
 	printf("secondAvoidSideWay\n");
 	secondAvoidSideWay_theta_180(first_y);//障害物検知前の軌道へ戻る(ロボットy座標 == first_yまで)
 	waitTime(1);
 	printf("turnClockwise\n");
-	turnClockwise(TURN_TARGET_ANGLE);
+	turnClockwise(TURN_TARGET_ANGLE, MODIFY_CLOCKWISE_90);
 	printf("finish\n");
 	waitTime(1);
 }
@@ -373,7 +383,7 @@ void twice_recognize_obs_theta_180(){
 	printf("avoidSide\n");
 	firstAvoidSideWay_theta_180(scanPos.max_y);
 	waitTime(1);
-	turnCounterClockwise(TURN_TARGET_ANGLE);
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90);
 	waitTime(1);
 	printf("twice recognize finsh\n");
 }
@@ -419,7 +429,7 @@ struct scanData scanClockwise(struct scanData scanPos){
 					//}
 				//}
 			}
-			if(abs(totalAngle - tempAngle) >= targetAngle - 7){
+			if(abs(totalAngle - tempAngle) >= targetAngle - MODIFY_CLOCKWISE_180){
 				directDrive(0, 0);
 				printf("totalAngle=%d, tempAngle=%d\n", totalAngle, tempAngle);
 				break;
@@ -460,7 +470,7 @@ struct scanData scanCounterClockwise(){
 					//}
 				//}
 			}
-			if(abs(totalAngle - tempAngle) >= targetAngle - 6){
+			if(abs(totalAngle - tempAngle) >= targetAngle - MODIFY_COUNTERCLOCKWISE_90){
 				directDrive(0, 0);
 				printf("totalAngle = %d, tempAngle = %d\n", totalAngle, tempAngle);
 				break;
@@ -572,8 +582,8 @@ void secondAvoidVirticalWay(int edge_of_object){
 	while(1){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
-		if(sum_data.x > edge_of_object + 1.5*CREATE_ACROSS){
-			printf("%d > %d + %g\n", sum_data.x, edge_of_object, 1.5 * CREATE_ACROSS);
+		if(sum_data.x > edge_of_object + CREATE_ACROSS){
+			printf("%d > %d + %d\n", sum_data.x, edge_of_object, CREATE_ACROSS);
 			directDrive(0, 0);
 			break;
 		}
@@ -593,7 +603,7 @@ void secondAvoidVirticalWay_theta_180(int edge_of_object){
 	while(1){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
-		if(sum_data.x < edge_of_object - 1.5*CREATE_ACROSS){
+		if(sum_data.x < edge_of_object - CREATE_ACROSS){
 			directDrive(0, 0);
 			break;
 		}
@@ -734,7 +744,7 @@ int goSideWay(){
 }
 
 /* 反時計廻りに旋回(スキャン無し) */
-int turnCounterClockwise(int targetAngle){
+int turnCounterClockwise(int targetAngle, int modify_value){
 
 	int vel_left = TURN_VELO;
 	int vel_right = MOVE_VELO;
@@ -745,7 +755,7 @@ int turnCounterClockwise(int targetAngle){
 	directDrive(vel_left, vel_right);
 	while(1){
 		totalAngle += getAngle();
-		if(abs(totalAngle - tempAngle) >= targetAngle - 4){
+		if(abs(totalAngle - tempAngle) >= targetAngle - modify_value){
 			directDrive(0, 0);
 			break;
 		}
@@ -756,17 +766,16 @@ int turnCounterClockwise(int targetAngle){
 }
 
 /* 時計廻りに旋回(スキャン無し) */
-int turnClockwise(int targetAngle){
+int turnClockwise(int targetAngle, int modify_value){
 	int vel_left = MOVE_VELO;
 	int vel_right = TURN_VELO;
 	int totalAngle = getAngle();
 	int tempAngle = totalAngle;
 	int operate_flag = -1;
-	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
 	while(1){
 		totalAngle += getAngle();
-		if(abs(totalAngle - tempAngle) >= targetAngle - 7){
+		if(abs(totalAngle - tempAngle) >= targetAngle - modify_value){
 			directDrive(0, 0);
 			break;
 		}
@@ -776,66 +785,7 @@ int turnClockwise(int targetAngle){
 	return operate_flag;
 }
 
-////////////////////////////////////////////////
-//              地図作成モジュール              //
-////////////////////////////////////////////////
 
-void getMap(){
-	struct objectPos_data coord[LINE_MAX];
-	struct objectPos_data cell[LINE_MAX];
-	struct draw_data node[CELL_NUM][CELL_NUM];
-	int dummy;
-	int cnt;
-	int i, j;
-	FILE *map_fp;
-	char *map_fname = "map_field.txt";
-//	fp2 = fopen(fname2, "r");
-//	if(map_fp == NULL){
-//		printf("%s cannnot open file\n", fname2);
-//		exit(-1);
-//	}
-	cnt = 0;
-	while(1){
-		if(!feof(fp2))
-			fscanf(fp2, "%d, %d, %d\n", &coord[cnt].x, &coord[cnt].y, &dummy);
-		else
-			break;
-		cnt++;
-	}
-	fclose(fp2);
-	
-	for(i=0;i<CELL_NUM;i++){
-		for(j=0;j<CELL_NUM;j++){
-			node[i][j].min_x = i * CELL_SIZE_X;
-			node[i][j].min_y = i * CELL_SIZE_Y;
-			node[i][j].max_x = (i+1) * CELL_SIZE_X;
-			node[i][j].max_y = (i+1) * CELL_SIZE_Y;
-			node[i][j].flag = 0;
-		}
-	}
-	
-	for(i=0;i<cnt;i++){
-		cell[i].x = coord[i].x / CELL_SIZE_X;
-		cell[i].y = coord[i].y / CELL_SIZE_Y;
-		node[cell[i].x][cell[i].y].flag = 1;
-	}
-	
-	map_fp = fopen(map_fname, "w");
-	if(map_fp == NULL){
-		printf("%s cannnot open file\n",map_fname);
-		exit(-1);
-	}
-	fprintf(map_fp, "node %d\n", CELL_NUM * CELL_NUM);
-	fprintf(map_fp, "MIN_x MIN_y MAX_x MAX_y\n");
-	for(i=0;i<CELL_NUM;i++){
-		for(j=0;j<CELL_NUM;j++){
-			fprintf(map_fp, "%4d, %4d, %4d, %4d, %4d\n"
-			, node[i][j].min_x, node[i][j].min_y, node[i][j].max_x, node[i][j].max_y, node[i][j].flag);
-		}
-	}
-	printf("map_finish\n");
-	fclose(map_fp);
-}
 
 int main(void){
 	int key;
@@ -851,7 +801,7 @@ int main(void){
 		if(operate_flag == TRUE)
 			break;
 		waitTime(1);
-		operate_flag = turnCounterClockwise(TURN_COUNTERCLOCKWISE_ANGLE);
+		operate_flag = turnCounterClockwise(TURN_COUNTERCLOCKWISE_ANGLE, MODIFY_COUNTERCLOCKWISE_120);
 		if(operate_flag == TRUE)
 			break;
 		waitTime(1);	
@@ -859,7 +809,7 @@ int main(void){
 		if(operate_flag == TRUE)
 			break;
 		waitTime(1);
-		operate_flag = turnCounterClockwise(TURN_CLOCKWISE_ANGLE);
+		operate_flag = turnCounterClockwise(TURN_CLOCKWISE_ANGLE, MODIFY_COUNTERCLOCKWISE_60);
 		if(operate_flag == TRUE)
 			break;
 		waitTime(1);
@@ -867,7 +817,7 @@ int main(void){
 		if(operate_flag == TRUE)
 			break;
 		waitTime(1);
-		operate_flag = turnClockwise(TURN_CLOCKWISE_ANGLE);
+		operate_flag = turnClockwise(TURN_CLOCKWISE_ANGLE, MODIFY_CLOCKWISE_60);
 		if(operate_flag == TRUE)
 			break;
 		waitTime(1);
@@ -875,7 +825,7 @@ int main(void){
 		if(operate_flag == TRUE)
 			break;
 		waitTime(1);
-		operate_flag = turnClockwise(TURN_COUNTERCLOCKWISE_ANGLE);
+		operate_flag = turnClockwise(TURN_COUNTERCLOCKWISE_ANGLE, MODIFY_CLOCKWISE_120);
 		if(operate_flag == TRUE)
 			break;
 		waitTime(1);
