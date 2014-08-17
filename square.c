@@ -22,16 +22,16 @@
 #define FIELD_VIRTICAL_LENGTH 4700 //フィールド縦辺(x軸方向)の長さ[mm]
 #define SMALL_FIELD_ANGLE 60 //頂点角度(小さい方)
 #define BIG_FIELD_ANGLE 120   //頂点角度(大きい方)
-#define TARGET_X 3600                 //x軸への目標移動距離[mm]
-#define TARGET_Y 600                   //y軸への目標移動距離[mm]
+#define TARGET_X 3800                 //x軸への目標移動距離[mm]
+#define TARGET_Y 800                   //y軸への目標移動距離[mm]
 #define TURN_CLOCKWISE_ANGLE 60             //目標回転角度(時計廻り)
 #define TURN_COUNTERCLOCKWISE_ANGLE 120     //目標回転角度(反時計廻り)
 #define TURN_TARGET_ANGLE 90
 #define SCAN_CLOCKWISE_ANGLE 180                   //スキャン角度(時計廻り)
 #define SCAN_COUNTERCLOCKWISE_ANGLE 90   //スキャン角度(反時計廻り)
 #define AVOID_SIDE 700                //横方向への移動距離(障害物回避)
-#define AVOID_VERTICAL 700        //縦方向への移動距離(障害物回避)
-#define SENSOR_THRESHOLD 400 //物体検知の物体間距離の閾値
+#define AVOID_VERTICAL 900        //縦方向への移動距離(障害物回避)
+#define SENSOR_THRESHOLD 415 //物体検知の物体間距離の閾値
 #define TRUE 1
 #define FALSE -1
 #define PRA -1                              //setjmpの戻り値
@@ -42,7 +42,7 @@
 /* 超信地旋回の誤差値 */
 #define MODIFY_CLOCKWISE_180 14
 #define MODIFY_CLOCKWISE_120 6
-#define MODIFY_CLOCKWISE_90 7
+#define MODIFY_CLOCKWISE_90 5
 #define MODIFY_CLOCKWISE_60 8
 #define MODIFY_COUNTERCLOCKWISE_120 6
 #define MODIFY_COUNTERCLOCKWISE_90 8
@@ -185,7 +185,7 @@ int getSensor(){
 	sensor_value = val;
 	//printf("analog = %d distance = %lf\n", sensor_value, (0.5271*sensor_value-0.9939)*25.4); 
 	//return sensor_value;
-	return (0.5271 * sensor_value - 0.9939) * 25.4;
+	return (0.5271 * sensor_value - 0.9939) * 25.4 + 15;
 }
 
 //////////////////////////////////////////////////
@@ -281,7 +281,7 @@ void recognize_obs_theta_0(){
 	printf("firstavoidVirtical\n");
 	firstAvoidVirticalWay(); // 物体に対して垂直方向に回避
 	waitTime(1);
-	printf("turnCounterClockwise\n");
+	printf("turnCounterClockwise!!!!!!!!!\n");
 	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90); //反時計廻りに旋回
 	waitTime(1);
 	printf("scanCounterClockwise\n");
@@ -298,6 +298,15 @@ void recognize_obs_theta_0(){
 	waitTime(1);
 	printf("secondAvoidSideWay\n");
 	secondAvoidSideWay(first_y);//障害物検知前の軌道へ戻る(ロボットy座標 == first_yまで)
+	waitTime(1);
+	printf("turnCounterClockwise\n");
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90); //反時計廻りに旋回
+	waitTime(1);
+	printf("scanCounterClockwise\n");
+	scanPos = scanCounterClockwise();
+	waitTime(1);
+	printf("scanClockwise\n");
+	scanPos = scanClockwise(scanPos); // 時計廻りにスキャン
 	waitTime(1);
 	printf("turnClockwise\n");
 	turnClockwise(TURN_TARGET_ANGLE, MODIFY_CLOCKWISE_90);
@@ -363,6 +372,15 @@ void recognize_obs_theta_180(){
 	printf("secondAvoidSideWay\n");
 	secondAvoidSideWay_theta_180(first_y);//障害物検知前の軌道へ戻る(ロボットy座標 == first_yまで)
 	waitTime(1);
+	printf("turnCounterClockwise\n");
+	turnCounterClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90); //反時計廻りに旋回
+	waitTime(1);
+	printf("scanCounterClockwise\n");
+	scanPos = scanCounterClockwise();
+	waitTime(1);
+	printf("scanClockwise\n");
+	scanPos = scanClockwise(scanPos); // 時計廻りにスキャン
+	waitTime(1);	
 	printf("turnClockwise\n");
 	turnClockwise(TURN_TARGET_ANGLE, MODIFY_CLOCKWISE_90);
 	printf("finish\n");
