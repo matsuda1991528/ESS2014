@@ -22,10 +22,10 @@
 #define FIELD_VIRTICAL_LENGTH 4700 //フィールド縦辺(x軸方向)の長さ[mm]
 #define SMALL_FIELD_ANGLE 60 //頂点角度(小さい方)
 #define BIG_FIELD_ANGLE 120   //頂点角度(大きい方)
-#define TARGET_X 3800                 //x軸への目標移動距離[mm]
+#define TARGET_X 2800                 //x軸への目標移動距離[mm]
 #define TARGET_Y 800                   //y軸への目標移動距離[mm]
 #define TURN_CLOCKWISE_ANGLE 60             //目標回転角度(時計廻り)
-#define TURN_COUNTERCLOCKWISE_ANGLE 120     //目標回転角度(反時計廻り)
+#define TURN_COUNTERCLOCKWISE_ANGLE 100     //目標回転角度(反時計廻り)
 #define TURN_TARGET_ANGLE 90
 #define SCAN_CLOCKWISE_ANGLE 180                   //スキャン角度(時計廻り)
 #define SCAN_COUNTERCLOCKWISE_ANGLE 90   //スキャン角度(反時計廻り)
