@@ -6,7 +6,6 @@
 #include<math.h>
 #include<time.h>
 #include<stdint.h>
-#include<setjmp.h>  //非局所的ジャンプ関数
 
 /* マクロ定義 */
 #define MOVE_VELO 100                 //車輪回転速度[mm/sec]
@@ -44,7 +43,7 @@
 #define MODIFY_5 2
 #define SIMILAR_AREA_X 100
 #define SIMILAR_AREA_Y 100 
-
+#define WAIT_TIME 0.5
 
 /* プロトタイプ宣言 */
 void count_time();
@@ -69,6 +68,10 @@ struct scanData scanCounterClockwise();
 struct objectPos_data getObjectPos(int, int);
 int checkBumpPosDifference(struct objectPos_data, struct objectPos_data);
 int checkCorner(int);
+void setCornerAngle(int);
+void setRobotAngle(int);
+struct objectPos_data getCornerPos(int);
+void setFieldLength(struct objectPos_data, int);
 
 ///////////////////////////////////////////////////
 //             構造体の定義                           //
@@ -108,9 +111,13 @@ char *fname2 = "object_position.txt";
 FILE *fp2;
 char *fname3 = "zyuusin_position.txt";
 FILE *fp3;
-time_t operate_start, operate_time;
-jmp_buf ma;           //環境情報を保存
-
+int firstCornerAngle;
+int secondCornerAngle;
+int thirdCornerAngle;
+int fourthCornerAngle;
+int robotAngle[5];
+int virticalFieldLength;
+int sideFieldLength;
 ////////////////////////////////////////////
 //         汎用モジュール                    //
 ////////////////////////////////////////////
@@ -133,6 +140,17 @@ void robotStop(){
 /* サイクルタイムのカウント */
 void count_time(){
 	int cicle_time = CICLE_TIME;
+	clock_t start, end;
+	start = clock();
+	while(1){
+		end = clock();
+		if((end - start) >= cicle_time)
+			break;
+	}
+}
+
+void waitTimeOriginal(){
+	double cicle_time = WAIT_TIME;
 	clock_t start, end;
 	start = clock();
 	while(1){
@@ -361,10 +379,34 @@ int checkCorner(int count){
 		return FALSE;
 }
 
+void setRobotAngle(int count_corner){
+	if(count_corner == 1){
+		sum_data.theta = TARGET_ANGLE_5 * JUDGE_CORNER_BUMP_NUM;
+	}else if(count_corner == 3){
+		sum_data.theta = 180 + TARGET_ANGLE_5 * JUDGE_CORNER_BUMP_NUM;
+	}
+	robotAngle[count_corner] = sum_data.theta;
+}
+
+void setCornerAngle(int count_corner){
+	if(count_corner == 2){
+		firstCornerAngle = robotAngle[count_corner] - robotAngle[count_corner - 1];
+	}
+	else if(count_corner == 3){
+		secondCornerAngle = robotAngle[count_corner] - robotAngle[count_corner - 1];
+	}
+	else{
+		thirdCornerAngle = robotAngle[count_corner] - robotAngle[count_corner - 1];
+		fourthCornerAngle = (360 - robotAngle[count_corner]) + TARGET_ANGLE_5 * JUDGE_CORNER_BUMP_NUM;
+	}
+}
+
 /* 外壁描画用モジュール */
 void serchOutEdge(){
 	struct objectPos_data currentBumpPos;
 	struct objectPos_data beforeBumpPos;
+	struct objectPos_data firstCornerPos;
+	struct objectPos_data secondCornerPos;
 	int vel_left = MOVE_VELO;
 	int vel_right = MOVE_VELO;
 	int bump_flag = 0;
@@ -372,6 +414,8 @@ void serchOutEdge(){
 	int count_corner = 0;
 	int count  = 0;
 	int trueOrFalse;
+	int diff_x;
+	int diff_y;
 	beforeBumpPos.x = beforeBumpPos.y = currentBumpPos.x = currentBumpPos.y = 0;
 	directDrive(vel_left, vel_right);
 	if(fp1){
@@ -382,25 +426,51 @@ void serchOutEdge(){
 			bump_flag = getBumpsAndWheelDrops();
 			//printf("bump_flag = %d\n", bump_flag);
 			if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
-				currentBumpPos = getBumpPos();
-				trueOrFalse = checkBumpPosDifference(currentBumpPos, beforeBumpPos);
-				if(trueOrFalse == TRUE){
+				currentBumpPos = getBumpPos();   //bumpした位置座標の取得
+				trueOrFalse = checkBumpPosDifference(currentBumpPos, beforeBumpPos); //前回と今回のbump位置の比較
+				if(trueOrFalse == TRUE){ //2点間が一定距離以内ならばcount++
 					count++;
 				}
-				else{
+				else{  //そうでないならばcount = 0
 					count = 0;
 				}
+				/* countが一定値に達したならば隅と判断 */
 				corner_flag = checkCorner(count);
-				if(corner_flag == TRUE)
+				if(corner_flag == TRUE){
 					count_corner++;
+					setRobotAngle(count_corner); // 1.隅と判断された時のロボット姿勢角度の取得
+					if(count_corner == 1){
+						firstCornerPos.x = sum_data.x;
+						firstCornerPos.y = sum_data.y;
+						virticalFieldLength = firstCornerPos.x;
+					}
+					else if(count_corner == 2){
+						secondCornerPos.x = sum_data.x;
+						secondCornerPos.y = sum_data.y;
+						diff_x = secondCornerPos.x - firstCornerPos.x;
+						diff_y = secondCornerPos.y - firstCornerPos.y;
+						sideFieldLength = sqrt(pow(diff_x, 2) + pow(diff_y, 2));
+					}
+					if(count_corner > 1){
+						setCornerAngle(count_corner); // 1.で取得した姿勢角度を基にフィール度角度の取得
+					}
+				}
 				printf("count_corner = %d\n", count_corner);
-				if(sum_data.y < 200 && count_corner == 3)
+				if(count_corner == 4){
+					robotStop();
+					waitTime(1);
+					robotBack(200);
+					waitTime(1);
+					turnCounterClockwise(360 - sum_data.theta, 0);
 					break;
+				}
 				robotStop();
-				waitTime(1);
+				waitTimeOriginal();
+				//waitTime(1);
 				robotBack(BACK_DISTANCE);
 				robotStop();
-				waitTime(1);
+				waitTimeOriginal();
+				//waitTime(1);
 				turnCounterClockwise(TARGET_ANGLE_5, MODIFY_5);
 				directDrive(vel_left, vel_right);
 				beforeBumpPos = currentBumpPos;
@@ -415,14 +485,21 @@ void serchOutEdge(){
 
 
 int main(void){
+	int i;
 	fp1 = fopen(fname1, "wt");
 	fp2 = fopen(fname2, "wt");
 	fp3 = fopen(fname3, "wt");
 	startOI_MT("/dev/ttyUSB0");
 	sum_data = initiate_pos();
 	serchOutEdge();
-
-
+	printf("firstCorner : %d\n", firstCornerAngle);
+	printf("secondCorner : %d\n", secondCornerAngle);
+	printf("thirdCorner : %d\n", thirdCornerAngle);
+	printf("fourthCorner : %d\n", fourthCornerAngle);
+	printf("virtical : %d,  side : %d\n", virticalFieldLength, sideFieldLength);
+	//for(i=1;i<5;i++){
+	//	printf("robotAngle[%d] = %d\n", i, robotAngle[i]);
+	//}
 	stopOI_MT();
 	fclose(fp1);
 	fclose(fp2);
