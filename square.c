@@ -27,22 +27,22 @@
 #define SCAN_CLOCKWISE_ANGLE 90                   //スキャン角度(時計廻り)
 #define SCAN_COUNTERCLOCKWISE_ANGLE 180   //スキャン角度(反時計廻り)
 #define AVOID_SIDE 400                //横方向への移動距離(障害物回避)
-#define AVOID_VIRTICAL 300        //縦方向への移動距離(障害物回避)
-#define SENSOR_THRESHOLD 350 //物体検知の物体間距離の閾値
+#define AVOID_VIRTICAL 400        //縦方向への移動距離(障害物回避)
+#define SENSOR_THRESHOLD 300 //物体検知の物体間距離の閾値
 #define BACK_DISTANCE 50
 #define TRUE 1
 #define FALSE -1
 #define MAX 9999
 #define MIN 0
-#define CREATE_ACROSS 200 //irobot createの半径[mm]
+#define CREATE_ACROSS 250 //irobot createの半径[mm]
 #define JUDGE_NOISE 200 //外れ値の基準
 /* 超信地旋回の誤差値 */
-#define MODIFY_CLOCKWISE_180 12
+#define MODIFY_CLOCKWISE_180 7
 #define MODIFY_CLOCKWISE_120 6
 #define MODIFY_CLOCKWISE_90 9
 #define MODIFY_CLOCKWISE_60 8
 #define MODIFY_COUNTERCLOCKWISE_120 6
-#define MODIFY_COUNTERCLOCKWISE_90 9
+#define MODIFY_COUNTERCLOCKWISE_90 8//scanCounterclock
 #define MODIFY_COUNTERCLOCKWISE_60 7
 
 #define AVOID_SIDE_BAIRITU 0.5
@@ -60,7 +60,7 @@
 
 /* 外壁描画用 */
 #define TARGET_ANGLE_5 5
-#define MODIFY_5 3
+#define MODIFY_5 2
 #define SIMILAR_AREA_X 100
 #define SIMILAR_AREA_Y 100 
 #define WAIT_TIME 0.5
@@ -137,12 +137,14 @@ struct scanData{
 //////////////////////////////////////////////
 struct objectPos_data objectPos;
 struct localization_data sum_data;
-char *fname1 = "create_position.dat";
+char *fname1 = "../../share/draw_field_form.txt";
 FILE *fp1;
-char *fname2 = "object_position.txt";
+char *fname2 = "../../share/object_position.txt";
 FILE *fp2;
-char *fname3 = "zyuusin_position.txt";
+char *fname3 = "../../share/zyuusin_position.txt";
 FILE *fp3;
+char *fname4 = "../../share/not_exist_object_position.txt";
+FILE *fp4;
 time_t operate_start, operate_time;
 int firstCornerAngle;
 int secondCornerAngle;
@@ -151,6 +153,7 @@ int fourthCornerAngle;
 int robotAngle[5];
 int virticalFieldLength;
 int sideFieldLength;
+int robot_theta_flag;
 
 ////////////////////////////////////////////
 //         汎用モジュール                    //
@@ -297,18 +300,25 @@ void avoidObject(){
 	int firstPos_y = sum_data.y;
 	int target_position;
 	int flag;
+	int zyuusin_x;
+	int zyuusin_y;
 	directDrive(0, 0);
-	waitTime(1);
+	waitTime(0.5);
 	/* CREATEの姿勢状態の判定	*/
-	if(sum_data.theta % 360 < 90){
-		flag = TRUE;
+	if(abs(sum_data.theta % 360) < 90){
+		robot_theta_flag = TRUE;
 	}else{
-		flag = FALSE;
+		robot_theta_flag = FALSE;
 	}
 	/* 1.スキャン(端の取得) */
 	scanPos = scanClockwise();
 	scanPos = scanCounterClockwise(scanPos);
-	if(flag == TRUE){
+	if(fp3){
+		zyuusin_x = (scanPos.min_x + scanPos.max_x) / 2;
+		zyuusin_y = (scanPos.min_y + scanPos.max_y) / 2;
+		fprintf(fp3, "%d, %d\n", zyuusin_x, zyuusin_y);
+	}
+	if(robot_theta_flag == TRUE){
 		target_position = scanPos.max_y;
 	}else{
 		target_position = scanPos.min_y;
@@ -323,7 +333,7 @@ void avoidObject(){
 	turnClockwise(TURN_TARGET_ANGLE, MODIFY_COUNTERCLOCKWISE_90);
 	scanPos = scanClockwise();
 	scanPos = scanCounterClockwise(scanPos);
-	if(flag == TRUE){
+	if(robot_theta_flag == TRUE){
 		target_position = scanPos.max_x;
 	}else{
 		target_position = scanPos.min_x;
@@ -343,11 +353,11 @@ void avoidObject(){
 void emergencyAvoidObjectVirticalWay(){
 	struct scanData scanPos;
 	int target_position;
-	waitTime(1);
+	waitTime(0.5);
 	goBack(BACK_DISTANCE);
 	scanPos = scanClockwise();
 	scanPos = scanCounterClockwise(scanPos);
-	if(sum_data.theta < 90){
+	if(sum_data.theta % 360 == 0){
 		target_position = scanPos.max_x;
 	}
 	else{
@@ -361,11 +371,11 @@ void emergencyAvoidObjectSideWay(){
 	printf("start emergency\n");
 	struct scanData scanPos;
 	int target_position;
-	waitTime(1);
+	waitTime(0.5);
 	goBack(BACK_DISTANCE);
 	scanPos = scanClockwise();
 	scanPos = scanCounterClockwise(scanPos);
-	if(sum_data.theta == -90){
+	if(sum_data.theta % 360 == -90 || sum_data.theta % 360 == 270){
 		target_position = scanPos.min_y;
 	}
 	else{
@@ -396,27 +406,34 @@ struct scanData getEdgeObject(struct scanData scanPos){
 /* 時計廻りへ旋回・物体をスキャン */
 struct scanData scanClockwise(){
 	struct scanData scanPos;
-	int vel_left = MOVE_VELO;
-	int vel_right = TURN_VELO;
+	int vel_left = 100;
+	int vel_right = -100;
 	int totalAngle = getAngle();
 	int tempAngle = totalAngle;
 	int targetAngle = SCAN_CLOCKWISE_ANGLE;
 	int sensor_distance;
+	int draw_count = 0;
+	int getAngle_value;
 //	int beforeAngle = sum_data.theta;
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
 	if(fp2){
 		while(1){
-			totalAngle += getAngle();
+			getAngle_value = getAngle();
+			totalAngle += getAngle_value;
 			sensor_distance = getSensor();
+			//if(draw_count % 5 == 0)
+			//fprintf(fp2, "totalAngle = %d : getAngle = %d\n", totalAngle, getAngle_value);
+			printf("totalAngle = %d : getAngle = %d\n", totalAngle, getAngle_value);
 			if(sensor_distance < 1.2 * SENSOR_THRESHOLD){
 				objectPos = getObjectPos(sensor_distance, sum_data.theta + (totalAngle - tempAngle));
 				//printf("x = %d, y = %d, theta = %d\n", objectPos.x, objectPos.y, sum_data.theta - (totalAngle - tempAngle));
 				//printf("%d = %d + (%d - %d)\n", sum_data.theta + (totalAngle - tempAngle), sum_data.theta, totalAngle, tempAngle);
 				//if(objectPos.y > 0){ //y軸方向のスキャン範囲指定
 					//if(objectPos.x > -1.73 * objectPos.y && objectPos.x < -1.73 * objectPos.y + FIELD_VIRTICAL_LENGTH){ //x軸方向のスキャン範囲指定
-						printf("robot = (%d, %d), object = (%d, %d)\n", sum_data.x, sum_data.y, objectPos.x, objectPos.y);
-						fprintf(fp2, "%4d, %4d\n", objectPos.x, objectPos.y);
+						//printf("robot = (%d, %d), object = (%d, %d)\n", sum_data.x, sum_data.y, objectPos.x, objectPos.y);
+						//if(draw_count % 5 == 0)
+							fprintf(fp2, "%4d, %4d\n", objectPos.x, objectPos.y);
 						scanPos = getEdgeObject(scanPos);
 					//}
 				//}
@@ -427,6 +444,8 @@ struct scanData scanClockwise(){
 				waitTime(1);
 				break;
 			}
+			draw_count++;
+			count_time();
 		}
 	}
 	sum_data.theta -= targetAngle;
@@ -438,26 +457,30 @@ struct scanData scanClockwise(){
 struct scanData scanCounterClockwise(struct scanData scanPos){
 	scanPos.min_x = scanPos.min_y = MAX;
 	scanPos.max_x = scanPos.max_y = MIN;
-	int vel_left = TURN_VELO;
-	int vel_right = MOVE_VELO;
+	int vel_left = -100;
+	int vel_right = 100;
 	int totalAngle = getAngle();
 	int tempAngle = totalAngle;
 	int targetAngle = SCAN_COUNTERCLOCKWISE_ANGLE;
 	int sensor_distance;
+	int draw_count = 0;
+	int getAngle_value = 0;
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
 	if(fp2){
 		while(1){
-			totalAngle += getAngle();
+			getAngle_value = getAngle();
+			totalAngle += getAngle_value;
 			sensor_distance = getSensor();
+			//if(draw_count % 5 == 0)
+			//fprintf(fp2, "totalAngle = %d : getAngle = %d\n", totalAngle, getAngle_value);
+			printf("totalAngle = %d : getAngle = %d\n", totalAngle, getAngle_value);
 			if(sensor_distance < 1.2*SENSOR_THRESHOLD){
 				objectPos = getObjectPos(sensor_distance, sum_data.theta + (totalAngle - tempAngle));
-				//printf("x = %d, y = %d, theta = %d\n", objectPos.x, objectPos.y, sum_data.theta + (totalAngle - tempAngle));
-				//printf("%d = %d + (%d - %d)\n", sum_data.theta + (totalAngle - tempAngle), sum_data.theta, totalAngle, tempAngle);
-				//if(objectPos.y > 0){ //y軸方向のスキャン範囲指定
-					//if(objectPos.x > -1.73 * objectPos.y && objectPos.x < -1.73 * objectPos.y + FIELD_VIRTICAL_LENGTH){ //x軸方向のスキャン範囲指定
-						printf("robot = (%d, %d), object = (%d, %d)\n", sum_data.x, sum_data.y, objectPos.x, objectPos.y);
-						fprintf(fp2, "%4d, %4d\n", objectPos.x, objectPos.y);
+						//printf("robot = (%d, %d), object = (%d, %d)\n", sum_data.x, sum_data.y, objectPos.x, objectPos.y);
+						//if(draw_count % 5 == 0){
+							fprintf(fp2, "%4d, %4d\n", objectPos.x, objectPos.y);
+						//}
 						scanPos = getEdgeObject(scanPos);
 					//}
 				//}
@@ -465,9 +488,11 @@ struct scanData scanCounterClockwise(struct scanData scanPos){
 			if(abs(totalAngle - tempAngle) >= targetAngle - MODIFY_COUNTERCLOCKWISE_90){
 				directDrive(0, 0);
 				printf("totalAngle = %d, tempAngle = %d\n", totalAngle, tempAngle);
-				waitTime(1);
+				waitTime(0.5);
 				break;
 			}
+			draw_count++;
+			count_time();
 		}
 	}
 	sum_data.theta += targetAngle;
@@ -486,7 +511,7 @@ void avoidSideWayIrregular(int edge_of_object){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
 		bump_flag = getBumpsAndWheelDrops();
-		if(bump_flag >=1 && bump_flag <=3){
+		if(bump_flag ==1 || bump_flag == 2 || bump_flag == 3){
 			emergencyAvoidObjectVirticalWay();
 			directDrive(vel_left, vel_right);
 		}
@@ -509,7 +534,7 @@ void avoidSideWayIrregular(int edge_of_object){
 			}
 		}
 	}
-	waitTime(1);
+	waitTime(0.5);
 }
 
 /* 縦(x軸)方向へ回避動作(距離は任意) */
@@ -524,7 +549,7 @@ void avoidVirticalWayIrregular(int edge_of_object){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
 		bump_flag = getBumpsAndWheelDrops();
-		if(bump_flag >=1 && bump_flag <=3){
+		if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
 			emergencyAvoidObjectSideWay();
 			directDrive(vel_left, vel_right);
 		}
@@ -547,7 +572,7 @@ void avoidVirticalWayIrregular(int edge_of_object){
 			}
 		}
 	}
-	waitTime(1);
+	waitTime(0.5);
 }
 
 /* 縦(x軸)方向へ回避動作(距離は一定) */
@@ -578,7 +603,7 @@ void avoidVirticalWayRegular(){
 			count_time();
 		}
 	}
-	waitTime(1);
+	waitTime(0.5);
 }
 
 void goBack(int target_distance){
@@ -600,7 +625,7 @@ void goBack(int target_distance){
 			count_time();
 		}
 	}
-	waitTime(1);
+	waitTime(0.5);
 }
 		
 void robotBack(int target_distance){
@@ -615,7 +640,7 @@ void robotBack(int target_distance){
 		while(1){
 			getCurrentPos(vel_left, vel_right);
 			printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
-			fprintf(fp1, "%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+			//printf(fp1, "%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
 			if(abs(sum_data.x - temp_x) >= target_distance || abs(sum_data.y - temp_y) >= target_distance){
 				directDrive(0, 0);
 				break;
@@ -625,7 +650,7 @@ void robotBack(int target_distance){
 			}
 		}
 	}
-	waitTime(1);
+	waitTime(0.2);
 }	
 
 
@@ -651,56 +676,79 @@ struct objectPos_data getObjectPos(int sensor_distance, int create_theta){
 /* else if wall exist right */
 // turnClockWise() <--> turnCounterClockWise()
 
+
+
 void goVirticalWay(){
-	int target_distance = virticalFieldLength * 0.3;
+	int target_distance = virticalFieldLength * 0.6;
 	int sensorThreshold = SENSOR_THRESHOLD;
 	int vel_left = MOVE_VELO;
 	int vel_right = MOVE_VELO;
-	int operate_flag = -1;
 	int temp_x = sum_data.x;
 	int sensor_distance;
 	int before_sensor_distance = MAX;
 	int totalDistance;
+	int bump_flag = 0;
+	int draw_count = 0;
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
-	while(1){
-		getCurrentPos(vel_left, vel_right);
-		//printf("totalDistance = %d, %4d, %4d, %4d\n",totalDistance,  sum_data.x, sum_data.y, sum_data.theta);
-		sensor_distance = getSensor();
-		//printf("before_sensor = %d, current_sensor %d\n", before_sensor_distance, sensor_distance);
-		totalDistance = sum_data.x - temp_x;
-		if(sensor_distance <= SENSOR_THRESHOLD){  //センサー取得値が閾値内
-			if((before_sensor_distance - sensor_distance) < JUDGE_NOISE){
-				if(abs(totalDistance) <= target_distance){
-					avoidObject();
-					directDrive(vel_left, vel_right);	
-				}
-				else{
-					directDrive(0, 0);
-					waitTime(1);
-					break;
+	if(fp4){
+		while(1){
+			getCurrentPos(vel_left, vel_right);
+			if(draw_count % 10 == 0){
+				fprintf(fp4, "%4d, %4d\n", sum_data.x, sum_data.y);
+			}
+			totalDistance = sum_data.x - temp_x;
+			sensor_distance = getSensor();
+			bump_flag = getBumpsAndWheelDrops();
+			if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
+				waitTime(0.5);
+				robotBack(BACK_DISTANCE);
+				goto OUT;
+			}
+			else if(sensor_distance <= SENSOR_THRESHOLD){  //センサー取得値が閾値内
+				if((before_sensor_distance - sensor_distance) < JUDGE_NOISE){
+					if(abs(totalDistance) <= target_distance){
+						OUT:
+						//song();
+						avoidObject();
+						directDrive(vel_left, vel_right);	
+					}
+					else{
+						//song();
+						directDrive(0, 0);
+						waitTime(0.5);
+						break;
+					}
 				}
 			}
+			count_time();
+			before_sensor_distance = sensor_distance;
+			draw_count++;
 		}
-		count_time();
-		before_sensor_distance = sensor_distance;
 	}
 }
 
 void goSideWay(){
-	int target_distance = sideFieldLength/4;
+	int target_distance = 0.6 * sideFieldLength;
 	int vel_left = MOVE_VELO;
 	int vel_right = MOVE_VELO;
-	int operate_flag = -1;
 	int temp_y = sum_data.y;
+	int bump_flag = 0;
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
 	while(1){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		bump_flag = getBumpsAndWheelDrops();
 		if(abs(sum_data.y - temp_y) >= target_distance){
 			directDrive(0, 0);
-			waitTime(1);
+			waitTime(0.5);
+			break;
+		}
+		else if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
+			robotBack(BACK_DISTANCE);
+			directDrive(0, 0);
+			waitTime(0.5);
 			break;
 		}
 		else{
@@ -723,7 +771,7 @@ void turnCounterClockwise(int targetAngle, int modify_value){
 		totalAngle += getAngle();
 		if(abs(totalAngle - tempAngle) >= targetAngle - modify_value){
 			directDrive(0, 0);
-			waitTime(0.5);
+			waitTime(0.2);
 			break;
 		}
 	}
@@ -742,7 +790,7 @@ void turnClockwise(int targetAngle, int modify_value){
 		totalAngle += getAngle();
 		if(abs(totalAngle - tempAngle) >= targetAngle - modify_value){
 			directDrive(0, 0);
-			waitTime(1);
+			waitTime(0.5);
 			break;
 		}
 	}
@@ -808,6 +856,7 @@ void serchOutEdge(){
 	int corner_flag;
 	int count_corner = 0;
 	int count  = 0;
+	int draw_count = 0;
 	int trueOrFalse;
 	int diff_x;
 	int diff_y;
@@ -818,7 +867,9 @@ void serchOutEdge(){
 		while(1){
 			getCurrentPos(vel_left, vel_right);
 			//printf("(%d, %d) : deg = %d\n", sum_data.x, sum_data.y, sum_data.theta);
-			fprintf(fp1, "%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+			if(draw_count % 10 == 0){
+				fprintf(fp1, "%4d, %4d\n", sum_data.x, sum_data.y);
+			}
 			bump_flag = getBumpsAndWheelDrops();
 			//printf("bump_flag = %d\n", bump_flag);
 			if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
@@ -855,23 +906,21 @@ void serchOutEdge(){
 				if(count_corner == 4){
 					robotStop();
 					waitTime(1);
-					robotBack(100);
+					robotBack(BACK_DISTANCE);
 					waitTime(1);
-					turnCounterClockwise(360 - sum_data.theta, 0);
+					turnCounterClockwise(360 - sum_data.theta, -5);
 					break;
 				}
 				robotStop();
-				waitTime(0.5);
-				//waitTime(1);
+				waitTime(0.2);
 				robotBack(BACK_DISTANCE);
 				robotStop();
-				waitTime(0.5);
-				//waitTime(1);
 				turnCounterClockwise(TARGET_ANGLE_5, MODIFY_5);
 				directDrive(vel_left, vel_right);
 				beforeBumpPos = currentBumpPos;
 			}
 			count_time();
+			draw_count++;
 		}
 	}
 	robotStop();
@@ -879,19 +928,56 @@ void serchOutEdge(){
 
 /* 外壁描画用モジュール */
 
+void serchDockingStationAndDocking(){
+	int bump_flag = 0;
+	directDrive(200, 200);
+	int infrared;
+	int chargingSource;
+	int cnt = 0;
+	while(1){
+		bump_flag = getBumpsAndWheelDrops();
+		infrared = readSensor(SENSOR_INFRARED);
+		printf("%d\n", infrared);
+		if(infrared < 255){
+			cnt++;
+		}else{
+			cnt = 0;
+		}
+		if(cnt >=10){
+			while(1){
+				runCoverAndDockDemo();
+				chargingSource = readSensor(SENSOR_CHARGING_SOURCES_AVAILABLE);
+				if(chargingSource == 2){
+					printf("Dockng success\n");
+					goto END;
+				}
+			}			
+		}
+		else if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
+			robotStop();
+			waitTime(0.2);
+			robotBack(BACK_DISTANCE);
+			robotStop();
+			turnClockwise(10, MODIFY_5);
+			directDrive(200, 200);
+		}
+		count_time();
+	}
+	END: ;
+}
 
 int main(void){
-	int key;
-	int operate_flag = FALSE;
 	int i;
 	int turnCounterClockwiseAngle, turnClockwiseAngle;
 	fp1 = fopen(fname1, "w");
 	fp2 = fopen(fname2, "wt");
 	fp3 = fopen(fname3, "wt");
+	fp4 = fopen(fname4, "wt");
 	startOI_MT("/dev/ttyUSB0");
 	sum_data = initiate_pos();
-	/*
+	
 	serchOutEdge();
+	fclose(fp1);
 	printf("firstCorner : %d\n", 180 - firstCornerAngle);
 	printf("secondCorner : %d\n", 180 - secondCornerAngle);
 	printf("thirdCorner : %d\n", 180 - thirdCornerAngle);
@@ -901,28 +987,47 @@ int main(void){
 	turnClockwiseAngle = 180 - turnCounterClockwiseAngle;
 	song();
 	waitTime(3);
-	*/
-	virticalFieldLength = 1500;
+
+	sum_data.theta = 0;
+
+/*
+	virticalFieldLength = 500;
+	sideFieldLength = 2800;
 	goVirticalWay();
-	turnCounterClockwise(180, MODIFY_CLOCKWISE_180);
+	//turnCounterClockwise(180, MODIFY_CLOCKWISE_180);
+	turnCounterClockwise(90, 6);
+	goSideWay();
+	turnCounterClockwise(90, 6);
 	goVirticalWay();
+*/
 /*	
-	for(i=0;i<2;i++){
+	for(i=0;i<1;i++){
 		goVirticalWay();
-		turnCounterClockwise(turnCounterClockwiseAngle, MODIFY_COUNTERCLOCKWISE_120);
+		turnCounterClockwise(turnCounterClockwiseAngle - 5, MODIFY_COUNTERCLOCKWISE_120);
 		goSideWay();
-		turnCounterClockwise(turnClockwiseAngle, MODIFY_COUNTERCLOCKWISE_60);
+		turnCounterClockwise(turnClockwiseAngle + 5, MODIFY_COUNTERCLOCKWISE_60);
 		goVirticalWay();
-		turnClockwise(turnClockwiseAngle, MODIFY_CLOCKWISE_60);
+		turnClockwise(turnClockwiseAngle + 5, MODIFY_CLOCKWISE_60);
 		goSideWay();
-		turnClockwise(turnCounterClockwiseAngle, MODIFY_CLOCKWISE_120);
+		turnClockwise(turnCounterClockwiseAngle + 5, MODIFY_CLOCKWISE_120);
 		update_theta();
 	}
 */
-	stopOI_MT();
-	fclose(fp1);
+	goVirticalWay();
+	turnCounterClockwise(turnCounterClockwiseAngle - 5, MODIFY_COUNTERCLOCKWISE_120);
+	goSideWay();
+	turnCounterClockwise(turnClockwiseAngle + 5, MODIFY_COUNTERCLOCKWISE_60);
+	goVirticalWay();
 	fclose(fp2);
 	fclose(fp3);
+/*	struct scanData scanPos;
+	scanPos = scanClockwise();
+	scanPos = scanCounterClockwise(scanPos);
+*/
+	serchDockingStationAndDocking();
+	stopOI_MT();
+
+	fclose(fp4);
 	//printf("before\n");
 	//getMap();
 	//printf("after\n");
