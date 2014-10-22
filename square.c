@@ -27,7 +27,7 @@
 #define SCAN_CLOCKWISE_ANGLE 90                   //スキャン角度(時計廻り)
 #define SCAN_COUNTERCLOCKWISE_ANGLE 180   //スキャン角度(反時計廻り)
 #define AVOID_SIDE 400                //横方向への移動距離(障害物回避)
-#define AVOID_VIRTICAL 400        //縦方向への移動距離(障害物回避)
+#define AVOID_VIRTICAL 600        //縦方向への移動距離(障害物回避)
 #define SENSOR_THRESHOLD 300 //物体検知の物体間距離の閾値
 #define BACK_DISTANCE 50
 #define TRUE 1
@@ -38,9 +38,9 @@
 #define JUDGE_NOISE 200 //外れ値の基準
 /* 超信地旋回の誤差値 */
 #define MODIFY_CLOCKWISE_180 7
-#define MODIFY_CLOCKWISE_120 6
-#define MODIFY_CLOCKWISE_90 9
-#define MODIFY_CLOCKWISE_60 8
+#define MODIFY_CLOCKWISE_120 10
+#define MODIFY_CLOCKWISE_90 12
+#define MODIFY_CLOCKWISE_60 7
 #define MODIFY_COUNTERCLOCKWISE_120 6
 #define MODIFY_COUNTERCLOCKWISE_90 8//scanCounterclock
 #define MODIFY_COUNTERCLOCKWISE_60 7
@@ -158,6 +158,20 @@ int robot_theta_flag;
 ////////////////////////////////////////////
 //         汎用モジュール                    //
 ////////////////////////////////////////////
+
+void writeRobotPos(){
+	if(fp4){
+		fprintf(fp4, "%4d, %4d\n", sum_data.x - 100, sum_data.y - 100);
+		fprintf(fp4, "%4d, %4d\n", sum_data.x - 100, sum_data.y);
+		fprintf(fp4, "%4d, %4d\n", sum_data.x - 100, sum_data.y + 100);
+		fprintf(fp4, "%4d, %4d\n", sum_data.x, sum_data.y -100);
+		fprintf(fp4, "%4d, %4d\n", sum_data.x, sum_data.y);
+		fprintf(fp4, "%4d, %4d\n", sum_data.x, sum_data.y + 100);
+		fprintf(fp4, "%4d, %4d\n", sum_data.x + 100, sum_data.y - 100);
+		fprintf(fp4, "%4d, %4d\n", sum_data.x + 100, sum_data.y);
+		fprintf(fp4, "%4d, %4d\n", sum_data.x + 100, sum_data.y + 100);
+	}
+}
 
 /* ラジアン変換 */
 double getRadian(int degree){
@@ -316,7 +330,7 @@ void avoidObject(){
 	if(fp3){
 		zyuusin_x = (scanPos.min_x + scanPos.max_x) / 2;
 		zyuusin_y = (scanPos.min_y + scanPos.max_y) / 2;
-		fprintf(fp3, "%d, %d\n", zyuusin_x, zyuusin_y);
+		fprintf(fp3, "center point = %d, %d\n", zyuusin_x, zyuusin_y);
 	}
 	if(robot_theta_flag == TRUE){
 		target_position = scanPos.max_y;
@@ -434,7 +448,9 @@ struct scanData scanClockwise(){
 						//printf("robot = (%d, %d), object = (%d, %d)\n", sum_data.x, sum_data.y, objectPos.x, objectPos.y);
 						//if(draw_count % 5 == 0)
 							fprintf(fp2, "%4d, %4d\n", objectPos.x, objectPos.y);
-						scanPos = getEdgeObject(scanPos);
+						if(objectPos.y > 350){
+							scanPos = getEdgeObject(scanPos);
+						}
 					//}
 				//}
 			}
@@ -481,7 +497,9 @@ struct scanData scanCounterClockwise(struct scanData scanPos){
 						//if(draw_count % 5 == 0){
 							fprintf(fp2, "%4d, %4d\n", objectPos.x, objectPos.y);
 						//}
-						scanPos = getEdgeObject(scanPos);
+						if(objectPos.y > 350){
+							scanPos = getEdgeObject(scanPos);
+						}
 					//}
 				//}
 			}
@@ -504,12 +522,16 @@ void avoidSideWayIrregular(int edge_of_object){
 	int vel_left = MOVE_VELO;
 	int vel_right = MOVE_VELO;
 	int bump_flag;
+	int draw_count = 0;
 	
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
 	while(1){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		if(draw_count % 20 == 0){
+			writeRobotPos();
+		}
 		bump_flag = getBumpsAndWheelDrops();
 		if(bump_flag ==1 || bump_flag == 2 || bump_flag == 3){
 			emergencyAvoidObjectVirticalWay();
@@ -531,6 +553,7 @@ void avoidSideWayIrregular(int edge_of_object){
 			}
 			else{
 				count_time();
+				draw_count++;
 			}
 		}
 	}
@@ -542,12 +565,16 @@ void avoidVirticalWayIrregular(int edge_of_object){
 	int vel_left = MOVE_VELO;
 	int vel_right = MOVE_VELO;
 	int bump_flag;
+	int draw_count = 0;
 	
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
 	while(1){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		if(draw_count % 20 == 0){
+			writeRobotPos();
+		}
 		bump_flag = getBumpsAndWheelDrops();
 		if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
 			emergencyAvoidObjectSideWay();
@@ -569,6 +596,7 @@ void avoidVirticalWayIrregular(int edge_of_object){
 			}
 			else{
 				count_time();
+				draw_count++;
 			}
 		}
 	}
@@ -582,12 +610,16 @@ void avoidVirticalWayRegular(){
 	int bump_flag;
 	int temp_x = sum_data.x;
 	int target_distance = AVOID_VIRTICAL;
+	int draw_count = 0;
 	
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
 	while(1){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		if(draw_count % 20 == 0){
+			writeRobotPos();
+		}		
 		bump_flag = getBumpsAndWheelDrops();
 		/* bumpしたならば緊急回避動作モードへ */
 		if(bump_flag >= 1 && bump_flag <= 3){
@@ -601,6 +633,7 @@ void avoidVirticalWayRegular(){
 		}
 		else{
 			count_time();
+			draw_count++;
 		}
 	}
 	waitTime(0.5);
@@ -677,9 +710,9 @@ struct objectPos_data getObjectPos(int sensor_distance, int create_theta){
 // turnClockWise() <--> turnCounterClockWise()
 
 
-
-void goVirticalWay(){
-	int target_distance = virticalFieldLength * 0.6;
+void firstGoVirticalWay(){
+	int target_distance = virticalFieldLength * 0.5;
+	int firstStage_distance = target_distance * 0.7;
 	int sensorThreshold = SENSOR_THRESHOLD;
 	int vel_left = MOVE_VELO;
 	int vel_right = MOVE_VELO;
@@ -691,54 +724,142 @@ void goVirticalWay(){
 	int draw_count = 0;
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
-	if(fp4){
-		while(1){
-			getCurrentPos(vel_left, vel_right);
-			if(draw_count % 10 == 0){
-				fprintf(fp4, "%4d, %4d\n", sum_data.x, sum_data.y);
-			}
-			totalDistance = sum_data.x - temp_x;
-			sensor_distance = getSensor();
-			bump_flag = getBumpsAndWheelDrops();
-			if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
-				waitTime(0.5);
+	while(1){
+		getCurrentPos(vel_left, vel_right);
+		if(draw_count % 20 == 0){
+			writeRobotPos();
+		}
+		totalDistance = sum_data.x - temp_x;
+		sensor_distance = getSensor();
+		bump_flag = getBumpsAndWheelDrops();
+		if(abs(totalDistance) < firstStage_distance){
+			if(bump_flag == 1 || bump_flag == 3){
+				robotStop();
+				waitTime(0.2);
 				robotBack(BACK_DISTANCE);
-				goto OUT;
+				robotStop();
+				turnCounterClockwise(TARGET_ANGLE_5, MODIFY_5);
+				sum_data.theta = 0;
+				directDrive(vel_left, vel_right);
 			}
-			else if(sensor_distance <= SENSOR_THRESHOLD){  //センサー取得値が閾値内
+			else if(bump_flag == 2){
+				avoidObject();
+				directDrive(vel_left, vel_right);
+			}
+		}
+		else if(abs(totalDistance) < target_distance){
+			if(sensor_distance <= SENSOR_THRESHOLD - 50){
 				if((before_sensor_distance - sensor_distance) < JUDGE_NOISE){
-					if(abs(totalDistance) <= target_distance){
-						OUT:
-						//song();
-						avoidObject();
-						directDrive(vel_left, vel_right);	
-					}
-					else{
-						//song();
-						directDrive(0, 0);
-						waitTime(0.5);
-						break;
-					}
+					avoidObject();
+					directDrive(vel_left, vel_right);
 				}
 			}
-			count_time();
-			before_sensor_distance = sensor_distance;
-			draw_count++;
+			else if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
+				avoidObject();
+				directDrive(vel_left, vel_right);
+			}
 		}
+		else if(abs(totalDistance) >= target_distance){
+			if(sensor_distance <= SENSOR_THRESHOLD){
+				if((before_sensor_distance - sensor_distance) < JUDGE_NOISE){
+					printf("sensor_distance = %d\n", sensor_distance);
+					robotStop();
+					waitTime(0.5);
+					break;
+				}
+			}
+		}
+		count_time();
+		before_sensor_distance = sensor_distance;
+		draw_count++;
+	}
+}
+
+
+void goVirticalWay(){
+	int target_distance = virticalFieldLength * 0.45;
+	int sensorThreshold = SENSOR_THRESHOLD;
+	int vel_left = MOVE_VELO;
+	int vel_right = MOVE_VELO;
+	int temp_x = sum_data.x;
+	int sensor_distance;
+	int before_sensor_distance = MAX;
+	int totalDistance;
+	int bump_flag = 0;
+	int draw_count = 0;
+	initiate_vel_omega();
+	directDrive(vel_left, vel_right);
+	while(1){
+		getCurrentPos(vel_left, vel_right);
+		if(draw_count % 20 == 0){
+			writeRobotPos();
+		}
+		totalDistance = sum_data.x - temp_x;
+		sensor_distance = getSensor();
+		bump_flag = getBumpsAndWheelDrops();
+		if(bump_flag == 1 || bump_flag == 2 || bump_flag == 3){
+			waitTime(0.5);
+			robotBack(BACK_DISTANCE);
+			goto OUT;
+		}
+		else if(sensor_distance <= SENSOR_THRESHOLD){  //センサー取得値が閾値内
+			if((before_sensor_distance - sensor_distance) < JUDGE_NOISE){
+				if(abs(totalDistance) <= target_distance){
+					OUT:
+					//song();
+					if(abs(sum_data.theta) % 360 < 90){
+						fprintf(fp4, "%4d, %4d\n", sum_data.x + 300, sum_data.y-100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x + 300, sum_data.y);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x + 300, sum_data.y+100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x + 200, sum_data.y-100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x + 200, sum_data.y);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x + 200, sum_data.y+100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x+100, sum_data.y-100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x+100, sum_data.y);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x+100, sum_data.y+100);
+					}else{
+						fprintf(fp4, "%4d, %4d\n", sum_data.x - 300, sum_data.y-100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x - 300, sum_data.y);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x - 300, sum_data.y+100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x - 200, sum_data.y-100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x - 200, sum_data.y);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x - 200, sum_data.y+100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x-100, sum_data.y-100);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x-100, sum_data.y);
+						fprintf(fp4, "%4d, %4d\n", sum_data.x-100, sum_data.y+100);
+					}
+					avoidObject();
+					directDrive(vel_left, vel_right);	
+				}
+				else{
+					//song();
+					directDrive(0, 0);
+					waitTime(0.5);
+					break;
+				}
+			}
+		}
+		count_time();
+		before_sensor_distance = sensor_distance;
+		draw_count++;
 	}
 }
 
 void goSideWay(){
-	int target_distance = 0.6 * sideFieldLength;
+	int target_distance = 0.25 * sideFieldLength;
 	int vel_left = MOVE_VELO;
 	int vel_right = MOVE_VELO;
 	int temp_y = sum_data.y;
 	int bump_flag = 0;
+	int draw_count = 0;
 	initiate_vel_omega();
 	directDrive(vel_left, vel_right);
 	while(1){
 		getCurrentPos(vel_left, vel_right);
 		printf("%4d, %4d, %4d\n", sum_data.x, sum_data.y, sum_data.theta);
+		if(draw_count % 20 == 0){
+			writeRobotPos();
+		}
 		bump_flag = getBumpsAndWheelDrops();
 		if(abs(sum_data.y - temp_y) >= target_distance){
 			directDrive(0, 0);
@@ -753,6 +874,7 @@ void goSideWay(){
 		}
 		else{
 			count_time();
+			draw_count++;
 		}
 	}
 }
@@ -908,7 +1030,7 @@ void serchOutEdge(){
 					waitTime(1);
 					robotBack(BACK_DISTANCE);
 					waitTime(1);
-					turnCounterClockwise(360 - sum_data.theta, -5);
+					turnCounterClockwise(360 - sum_data.theta, 10);
 					break;
 				}
 				robotStop();
@@ -958,7 +1080,7 @@ void serchDockingStationAndDocking(){
 			waitTime(0.2);
 			robotBack(BACK_DISTANCE);
 			robotStop();
-			turnClockwise(10, MODIFY_5);
+			turnClockwise(5, MODIFY_5);
 			directDrive(200, 200);
 		}
 		count_time();
@@ -978,6 +1100,21 @@ int main(void){
 	
 	serchOutEdge();
 	fclose(fp1);
+	int temp_virtical = virticalFieldLength / 100;
+	int temp_side = sideFieldLength / 100;
+	double aspect_virtical = temp_virtical / temp_virtical + temp_side;
+	double aspect_side = temp_side / temp_virtical + temp_side;
+	if(fp3){
+		fprintf(fp3, "\n-----------------------\n\n");
+		fprintf(fp3, "firstCorner : %d\n", 180 - firstCornerAngle);
+		fprintf(fp3, "secondCorner : %d\n", 180 - secondCornerAngle);
+		fprintf(fp3, "thirdCorner : %d\n", 180 - thirdCornerAngle);
+		fprintf(fp3, "fourthCorner : %d\n", 180 - fourthCornerAngle);
+		fprintf(fp3, "\n-----------------------\n\n");
+		fprintf(fp3, "virtical : %d,  side : %d\n", virticalFieldLength, sideFieldLength);
+		fprintf(fp3, "\n ----------------------\n");
+		//fprintf(fp3, "aspect ratio     %g : %g\n", aspect_virtical, aspect_side);
+	}
 	printf("firstCorner : %d\n", 180 - firstCornerAngle);
 	printf("secondCorner : %d\n", 180 - secondCornerAngle);
 	printf("thirdCorner : %d\n", 180 - thirdCornerAngle);
@@ -989,6 +1126,8 @@ int main(void){
 	waitTime(3);
 
 	sum_data.theta = 0;
+	sum_data.x = 200;
+	sum_data.y = 300;
 
 /*
 	virticalFieldLength = 500;
@@ -1013,10 +1152,22 @@ int main(void){
 		update_theta();
 	}
 */
-	goVirticalWay();
+//	virticalFieldLength = 2500;
+//	sideFieldLength = 3000;
+	
+	
+//	turnCounterClockwiseAngle = 110;
+//	turnClockwiseAngle = 70;
+	firstGoVirticalWay();
 	turnCounterClockwise(turnCounterClockwiseAngle - 5, MODIFY_COUNTERCLOCKWISE_120);
+	printf("goside\n");
 	goSideWay();
 	turnCounterClockwise(turnClockwiseAngle + 5, MODIFY_COUNTERCLOCKWISE_60);
+	goVirticalWay();
+	turnClockwise(turnClockwiseAngle + 5, MODIFY_CLOCKWISE_60);
+	goSideWay();
+	turnClockwise(turnCounterClockwiseAngle -5, MODIFY_CLOCKWISE_120);
+	update_theta();
 	goVirticalWay();
 	fclose(fp2);
 	fclose(fp3);
